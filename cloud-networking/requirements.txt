@@ -1,0 +1,6 @@
+google-cloud-storage
+gcloud-aio-storage
+boto3
+pyyaml
+openpyxl
+guppy3
