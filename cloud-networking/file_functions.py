@@ -49,41 +49,46 @@ def read_from_bucket(bucket_name:str, file_name: str) -> list:
         raise e
 
 
-def write_to_excel(sheets: dict = {'Sheet1': []}, excelfile: str = "Book1.xlsx", start_row: int = 1, start_col: int = 1):
+def write_to_excel(sheets: dict = {'Sheetz': []}, excelfile: str = "Book1.xlsx", start_row: int = 1, start_col: int = 1):
 
     wb = Workbook()
     for sheet_name, data in sheets.items():
+
+        # Create worksheet
+        ws = wb.create_sheet(sheet_name)
 
         if len(data) < 1:
             continue
         if not isinstance(data[0], dict):
             continue
 
-        # Create worksheet
-        ws = wb.create_sheet(sheet_name)
 
         # Write field names in the first row
         num_columns = 0
+        column_widths = {}
         #print(data[0])
         for column_index, column_name in enumerate(data[0].keys()):
+            #print(column_index, column_name)
             ws.cell(row=start_row, column=column_index + 1).value = column_name
             num_columns += 1
+            column_widths[column_index] = len(str(column_name))
 
         # Write out rows of data
-        column_widths = [0] * num_columns
         for row_num in range(len(data)):
             #print(data[row_num])
             row = list(data[row_num].values())
             ws.append(row)
 
-            # Adjust colum widths
-            for index, entry in enumerate(row):
+            # Keep track of largest value for each column
+            for column_index, entry in enumerate(row):
+                #print(column_index, entry)
                 column_width = len(str(entry)) if entry else 0
-                if column_width > column_widths[index]:
-                    column_widths[index] = column_width
+                if column_index in column_widths:
+                    if column_width > column_widths[column_index]:
+                        column_widths[column_index] = column_width
 
         for i in range(num_columns):
-            ws.column_dimensions[get_column_letter(i + 1)].width = column_widths[i]
+            ws.column_dimensions[get_column_letter(i + 1)].width = column_widths[i] + 1
 
     # Save the file
     wb.save(filename=excelfile)

@@ -15,6 +15,7 @@ def connect_to_api(api_name='compute', version='v1', credentials_file=None):
 
     return resource_object
 
+
 def get_projects():
 
     """

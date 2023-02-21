@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import datetime
 from gcp_api import *
 
@@ -14,16 +15,17 @@ def get_ssl_certs(resource_object, project_id: str) -> list:
         items = []
 
     for item in items:
-        #print(item)
+
         info = {
-           'name': item.get('name'),
-           'description': item.get('description'),
-           'type': item.get('type', "UNKNOWN"),
+            'project_id': project_id,
+            'name': item.get('name'),
+            'description': item.get('description'),
+            'type': item.get('type', "UNKNOWN"),
         }
         if 'expireTime' in item:
-           expire_ymd = item['expireTime'][:10] # Read Year, Monday, Day from expireTime field
-           info['expires_date'] = expire_ymd
-           info['expires_timestamp'] = datetime.timestamp(datetime.strptime(expire_ymd, "%Y-%m-%d"))
+            expire_ymd = item['expireTime'][:10] # Read Year, Monday, Day from expireTime field
+            info['expires_date'] = expire_ymd
+            info['expires_timestamp'] = datetime.timestamp(datetime.strptime(expire_ymd, "%Y-%m-%d"))
         ssl_certs.append(info)
 
     # Regional
@@ -39,8 +41,11 @@ def get_sharedvpc_service_projects(resource_object, project_id: str) -> list:
 
 def get_sharedvpc_host_projects(resource_object, project_id: str) -> list:
 
-    _ = resource_object.projects().listXpnHosts(project=project_id, body={}).execute()
-    return [p['name'] for p in _.get('items', []) ]
+    try:
+        _ = resource_object.projects().listXpnHosts(project=project_id, body={}).execute()
+        return [p['name'] for p in _.get('items', [])]
+    except Exception as e:
+        raise e
 
 
 def get_routes(resource_object, project_id: str) -> {}:
@@ -49,25 +54,41 @@ def get_routes(resource_object, project_id: str) -> {}:
     Get list of all routes, project level
     """
 
+    routes = []
     routes_per_network = {}
 
     page_token = None
     while True:
-        _ = resource_object.routes().list(project=project_id, pageToken=page_token).execute()
-        items = _.get('items', [])
-        page_token = _.get('nextPageToken')
-        for route in items:
-            #print(route)
-            network_name = route['network'].split('/')[-1]
-            if not network_name in routes_per_network:
-                routes_per_network[network_name] = []
-            routes_per_network[network_name].append(route)
+        try:
+            _ = resource_object.routes().list(project=project_id, pageToken=page_token).execute()
+            items = _.get('items', [])
+            page_token = _.get('nextPageToken')
+        except Exception as e:
+            break
+
+        for item in items:
+            network_name = item.get('network').split('/')[-1]
+            info = {
+                'name': item.get('name'),
+                'destRange': item.get('destRange'),
+                'project_id': project_id,
+                'network_name': network_name,
+                'priority': item.get('priority'),
+            }
+            if 'creationTimestamp' in item:
+                created_ymd = item['creationTimestamp'][:10]  # Read Year, Monday, Day from expireTime field
+                info['created'] = datetime.timestamp(datetime.strptime(created_ymd, "%Y-%m-%d"))
+            routes.append(info)
+
+            #if not network_name in routes_per_network:
+            #    routes_per_network[network_name] = []
+            #routes_per_network[network_name].append(info)
 
         # Check for a next page token in the response; if one isn't present, we're done
         if not page_token:
             break
 
-    return routes_per_network
+    return routes
 
 
 def get_cloud_routers(resource_object, project_id: str, region: str = None) -> list:
@@ -84,6 +105,7 @@ def get_cloud_routers(resource_object, project_id: str, region: str = None) -> l
         info = {
             'network_name': item.get('network').split('/')[-1],
             'region': item.get('region').split('/')[-1],
+            'project_id': project_id,
             'num_interfaces': len(item.get('interfaces', [])),
         }
         cloud_routers.append(info)
@@ -99,7 +121,7 @@ def get_cloud_router_routes(resource_object, project_id: str, cloud_router_name:
 
     routes = []
 
-    _ = resource_object.routers().getRouterStatus(project=project_id,region=region_name,router=cloud_router_name).execute()
+    _ = resource_object.routers().getRouterStatus(project=project_id, region=region_name, router=cloud_router_name).execute()
     best_routes = _['result'].get('bestRoutes', [])
 
     for item in best_routes:
@@ -138,7 +160,7 @@ def get_firewall_rules(resource_object, project_id):
         _ = resource_object.firewalls().list(project=project_id).execute()
         firewall_rules.extend(_.get('items', []))
         page_token = _.get('nextPageToken')
-        del(_)
+        del _
         if not page_token:
             break
 
@@ -155,24 +177,111 @@ def get_addresses(resource_object, project_id, options={}):
     except Exception as e:
         return []
 
+    fields = {
+        'address': "address",
+        'name': "name"
+    }
+
     for item in parse_aggregated_results(items, 'addresses'):
         info = {
             'address': item.get('address'),
             'name': item.get('name'),
+            'description': item.get('description'),
             'project_id': project_id,
             'type': item.get('addressType', "unknown"),
             'region': item.get('region'),
             'purpose': item.get('purpose'),
+            'tier': item.get('networkTier'),
+            'network_name': None,
             'subnet_name': None,
+            'prefix': None,
         }
+        if 'network' in item:
+            info['network_name'] = item.get('network').split('/')[-1]
         if 'subnetwork' in item:
             info['subnet_name'] = item.get('subnetwork').split('/')[-1]
         addresses.append(info)
 
-    #return addresses
-    yield addresses
+    # Global Addresses
+    try:
+        _ = resource_object.globalAddresses().list(project=project_id).execute()
+        items = _.get('items', [])
+    except Exception as e:
+        items = []
 
-def get_instances(resource_object, project_id):
+    for item in items:
+        #print(item)
+        info = {
+            'address': item.get('address'),
+            'name': item.get('name'),
+            'description': item.get('description'),
+            'project_id': project_id,
+            'type': item.get('addressType', "unknown"),
+            'region': "global",
+            'purpose': item.get('purpose'),
+            'tier': item.get('networkTier'),
+            'network_name': None,
+            'subnet_name': None,
+            'prefix': None,
+        }
+        if 'network' in item:
+            info['network_name'] = item.get('network').split('/')[-1]
+        if 'subnetwork' in item:
+            info['subnet_name'] = item.get('subnetwork').split('/')[-1]
+        if 'prefixLength' in item:
+            info['address'] = info['address'] + "/" + str(item.get('prefixLength'))
+        #info['region'] == "global"
+
+        addresses.append(info)
+
+    return addresses
+
+
+def get_vpn_tunnels(resource_object, project_id) -> list:
+
+    vpn_tunnels = []
+
+    try:
+        _ = resource_object.vpnTunnels().aggregatedList(project=project_id).execute()
+        items = _.get('items', {})
+    except Exception as e:
+        return []
+
+    for item in parse_aggregated_results(items, 'vpnTunnels'):
+        info = {
+            'project_id': project_id,
+            'name': item.get('name'),
+            'region': item.get('region'),
+            'vpn_gateway': item['vpnGateway'].split('/')[-1] if 'vpnGateway' in item else None,
+            'interface': item.get('vpnGatewayInterface'),
+            'peer_gateway': item['peerExternalGateway'].split('/')[-1] if 'peerExternalGateway' in item else None,
+            'peer_ip': item.get('peerIp'),
+            'ike_version': item.get('ikeVersion', 0),
+            'status': item.get('status'),
+        }
+        vpn_tunnels.append(info)
+
+    return vpn_tunnels
+
+
+def get_interconnects(resource_object, project_id) -> list:
+
+    interconnects = []
+
+    try:
+        _ = resource_object.interconnects().list(project=project_id).execute()
+        items = _.get('items', [])
+    except Exception as e:
+        return []
+
+    for item in items:
+        info = item
+        interconnects.append(info)
+
+    return interconnects
+
+
+def get_instances(resource_object, project_id) -> list:
 
     instances = []
 
@@ -192,7 +301,8 @@ def get_instances(resource_object, project_id):
             'status': item.get('status', "UNKNOWN"),
         }
         for nic in item.get('networkInterfaces', []):
-            info['address'] = item.get('networkIP')
+            #print(item)
+            info['address'] = nic.get('networkIP')
             if 'network' in nic:
                 info['network_name'] = nic.get('network').split('/')[-1]
             if 'subnetwork' in nic:
@@ -262,7 +372,28 @@ def get_forwarding_rules(resource_object, project_id: str) -> list:
         items = []
 
     for item in items:
-        forwarding_rules.append(item)
+        #print(item)
+        info = {
+            'project_id': project_id,
+            'name': item.get('name'),
+            'ip_address': item.get('IPAddress'),
+            'lb_scheme': item.get('loadBalancingScheme'),
+            'region': "global",
+            'network_name': None,
+            'subnet_name': None,
+        }
+        if 'ports' in item:
+            ports = str(item.get('ports', "none"))
+        elif 'portRange' in item:
+            ports = str(item.get('portRange').split("-"))
+        else:
+            ports = "all"
+        info['ports'] = ports
+        if 'network' in item:
+            info['network_name'] = item.get('network').split('/')[-1]
+        if 'subnetwork' in item:
+            info['subnet_name'] = item.get('subnetwork').split('/')[-1]
+        forwarding_rules.append(info)
 
     # Regional Forwarding Rules
     try:
@@ -271,7 +402,27 @@ def get_forwarding_rules(resource_object, project_id: str) -> list:
     except Exception as e:
         items = {}
     for item in parse_aggregated_results(items, 'forwardingRules'):
-        info = item
+        #print(item)
+        info = {
+            'project_id': project_id,
+            'name': item.get('name'),
+            'ip_address': item.get('IPAddress'),
+            'lb_scheme': item.get('loadBalancingScheme'),
+            'region': item.get('region', "global"),
+            'network_name': None,
+            'subnet_name': None,
+        }
+        if 'ports' in item:
+            ports = str(item.get('ports', "none"))
+        elif 'portRange' in item:
+            ports = str(item.get('portRange').split("-"))
+        else:
+            ports = "all"
+        info['ports'] = ports
+        if 'network' in item:
+            info['network_name'] = item.get('network').split('/')[-1]
+        if 'subnetwork' in item:
+            info['subnet_name'] = item.get('subnetwork').split('/')[-1]
         forwarding_rules.append(info)
 
     return forwarding_rules
@@ -286,6 +437,7 @@ def get_url_maps(resource_object, project_id: str) -> list:
         items = _.get('items', {})
     except Exception as e:
         items = {}
+
     for item in parse_aggregated_results(items, 'urlMaps'):
         info = item
         url_maps.append(info)
