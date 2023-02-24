@@ -37,11 +37,10 @@ def main():
 
     print(len(clusters), "found")
     cluster_versions = [ c.get('currentNodeVersion', "unknown").split('-')[0] for c in clusters ]
-    version_count = Counter(cluster_versions)
-    pprint(version_count)
+    pprint(Counter(cluster_versions))
 
     cluster_regions = [ c['zone'][:-2] if c['zone'][-2] == "-" else c['zone'] for c in clusters]
-    print(Counter(cluster_regions))
+    pprint(Counter(cluster_regions))
 
 
 if __name__ == "__main__":
