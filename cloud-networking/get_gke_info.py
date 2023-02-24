@@ -40,8 +40,8 @@ def main():
     version_count = Counter(cluster_versions)
     pprint(version_count)
 
-    cluster_zones = [ c.get['zone'][:-2] if c['zone'][-2] == "-" else c['zone'] for c in clusters]
-    print(Counter(cluster_zones))
+    cluster_regions = [ c['zone'][:-2] if c['zone'][-2] == "-" else c['zone'] for c in clusters]
+    print(Counter(cluster_regions))
 
 
 if __name__ == "__main__":
