@@ -35,6 +35,7 @@ def main():
     except Exception as e:
         quit(e)
 
+    print(len(clusters), "found")
     cluster_versions = [ c.get('currentNodeVersion', "unknown").split('-')[0] for c in clusters ]
     version_count = Counter(cluster_versions)
     pprint(version_count)
