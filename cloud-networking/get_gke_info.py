@@ -39,7 +39,8 @@ def main():
     cluster_versions = [ c.get('currentNodeVersion', "unknown").split('-')[0] for c in clusters ]
     version_count = Counter(cluster_versions)
     pprint(version_count)
-    cluster_zones = [ c.get('zone', "unknown") for c in clusters ]
+
+    cluster_zones = [ c.get['zone'][:-2] if c['zone'][-2] == "-" else c['zone'] for c in clusters]
     print(Counter(cluster_zones))
 
 
