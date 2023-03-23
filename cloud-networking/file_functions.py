@@ -1,5 +1,6 @@
-import yaml
-from os import stat
+from yaml import load, dump
+from os import stat, environ
+from platform import system
 from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -17,7 +18,7 @@ def get_zones_from_yaml(file_location="./zones.yaml", time_threshold=None):
         if round(info.st_mtime) < time_threshold:
             return None  # force a refresh if file is too old
         with open(file_location) as file:
-            return yaml.load(file, Loader=yaml.FullLoader)
+            return load(file, Loader=yaml.FullLoader)
 
     return {}
 
@@ -30,7 +31,7 @@ def write_to_yaml(data, file_location=None):
         info = stat(file_location)
 
     with open(file_location, 'w') as file:
-        output_file = yaml.dump(data, file)
+        output_file = dump(data, file)
 
     return None
 
@@ -92,3 +93,16 @@ def write_to_excel(sheets: dict = {'Sheetz': []}, excelfile: str = "Book1.xlsx",
 
     # Save the file
     wb.save(filename=excelfile)
+
+
+def get_home_dir() -> str:
+
+    my_os = system().lower()
+    if my_os.startswith("win"):
+        home_dir = environ.get("USERPROFILE")
+        seperator = "\\"
+    elif my_os:
+        home_dir = environ.get("HOME")
+        seperator = "/"
+
+    return home_dir + seperator

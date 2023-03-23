@@ -3,6 +3,48 @@ from datetime import datetime
 from gcp_api import *
 
 
+def get_networks(resource_object, project_id: str) -> list:
+
+    networks = []
+    vpc_peerings = []
+
+    try:
+        _ = resource_object.networks().list(project=project_id).execute()
+        items = _.get('items', [])
+    except Exception as e:
+        items = []
+
+    #print("Found", len(items), "networks in project ID", project_id)
+
+    for item in items:
+        info = {
+            'project_id': project_id,
+            'name': item.get('name'),
+            'description': item.get('description'),
+            'routing_mode': item.get('routingConfig', "UNKNOWN"),
+        }
+        if 'routingConfig' in item:
+            routing_config = item.get('routingConfig')
+            info['routing_mode'] = routing_config.get('routingMode', "UNKNOWN")
+        for peering in item.get('peerings', []):
+            #print(peering.get('name'))
+            peer_info = {
+                'project_id': project_id,
+                'network_name': item['name'],
+                'name': peering.get('name'),
+                #'peer_project_id': peering['network'].split('/')[-4],
+                #'peer_network_name': peering['network'].split('/')[-1],
+                'peer_mtu': peering.get('peerMtu', 0),
+                'stack_type': peering.get('stackType', "UNKNOWN"),
+                'state': peering.get('state', "UNKNOWN"),
+            }
+            #print(peer_info)
+            vpc_peerings.append(peer_info)
+        networks.append(info)
+
+    return networks, vpc_peerings
+
+
 def get_ssl_certs(resource_object, project_id: str) -> list:
 
     ssl_certs = []
@@ -269,13 +311,37 @@ def get_interconnects(resource_object, project_id) -> list:
     interconnects = []
 
     try:
-        _ = resource_object.interconnects().list(project=project_id).execute()
-        items = _.get('items', [])
+        _ = resource_object.interconnectAttachments().aggregatedList(project=project_id).execute()
+        items = _.get('items', {})
     except Exception as e:
         return []
 
-    for item in items:
-        info = item
+    for item in parse_aggregated_results(items, 'interconnectAttachments'):
+        info = {
+            'project_id': project_id,
+            'name': item.get('name'),
+            'type': item.get('type', "UNKNOWN"),
+            'admin_enabled': item.get('adminEnabled', "UNKNOWN"),
+            'state': item.get('state', "UNKNOWN"),
+            'bandwidth': item.get('bandwidth', "UNKNOWN"),
+            'region': item.get('region'),
+            'pairing_key': item.get('pairingKey', "NONE"),
+            'cloud_router_ip': item.get('cloudRouterIpAddress'),
+            'customer_router_ip': item.get('customerRouterIpAddress'),
+            'encryption': item.get('encryption', "UNKNOWN"),
+            'mtu': item.get('mtu', 0),
+            'vlan_tag': item.get('vlanTag8021q', 1),
+        }
+        if 'router' in item:
+            info['cloud_router'] = item.get('router').split('/')[-1]
+        if 'partnerMetadata' in item:
+            metadata = item['partnerMetadata']
+            info['partner_name'] = metadata.get('partnerName', "UNKNOWN")
+            info['interconnect_name'] = metadata.get('interconnectName', "UNKNOWN")
+            info['partner_portal'] = metadata.get('portalUrl')
+        if 'creationTimestamp' in item:
+            created_ymd = item['creationTimestamp'][:10]
+            info['created'] = datetime.timestamp(datetime.strptime(created_ymd, "%Y-%m-%d"))
         interconnects.append(info)
 
     return interconnects

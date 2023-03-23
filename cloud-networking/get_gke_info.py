@@ -23,7 +23,7 @@ def main():
     network_name = environ.get('NETWORK_NAME', "default")
 
     try:
-        resource_object = connect_to_api(api_name="container",version="v1")
+        resource_object = connect_to_api(api_name="container", version="v1")
         for PROJECT_ID in get_project_ids():
             for cluster in get_gke_clusters(resource_object, PROJECT_ID):
                 if not network_name:

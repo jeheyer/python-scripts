@@ -2,6 +2,7 @@ google-api-python-client
 google-cloud-storage
 gcloud-aio-storage
 boto3
+tomli
 pyyaml
 openpyxl
 guppy3

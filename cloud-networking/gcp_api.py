@@ -1,4 +1,4 @@
-from googleapiclient import discovery
+from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
 
@@ -9,9 +9,9 @@ def connect_to_api(api_name='compute', version='v1', credentials_file=None):
             credentials = service_account.Credentials.from_service_account_file(credentials_file)
         else:
             credentials = None
-        resource_object = discovery.build(api_name, version, credentials=credentials)
+        resource_object = build(api_name, version, credentials=credentials)
     except Exception as e:
-        raise(e)
+        raise e
 
     return resource_object
 
@@ -36,7 +36,7 @@ def get_project_ids() -> list:
     Get list of all GCP project IDs we have access to
     """
 
-    return [ project.get('projectId') for project in get_projects() ]
+    return [project.get('projectId') for project in get_projects()]
 
 
 def get_regions(resource_object, project_id: str) -> list:
@@ -47,7 +47,7 @@ def get_regions(resource_object, project_id: str) -> list:
     """
 
     _ = resource_object.regions().list(project=project_id).execute()
-    return [ region.get('name') for region in _.get('items', []) ]
+    return [region.get('name') for region in _.get('items', [])]
 
 
 def get_zones(resource_object, project_id: str) -> list:
@@ -55,6 +55,8 @@ def get_zones(resource_object, project_id: str) -> list:
     """
     Get Zones with Region name as key
     """
+
+    zones = []
 
     _ = resource_object.zones().list(project=project_id).execute()
     zones = _.get('items', [])
@@ -72,6 +74,7 @@ def get_zones(resource_object, project_id: str) -> list:
 def parse_aggregated_results(results: dict, key: str) -> list:
 
     items = []
+
     for k, v in results.items():
         if k == 'global':
             region = 'global'
@@ -80,4 +83,5 @@ def parse_aggregated_results(results: dict, key: str) -> list:
         for item in results[k].get(key, []):
             item['region'] = region
             items.append(item)
+
     return items
