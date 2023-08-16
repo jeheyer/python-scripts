@@ -1,0 +1,8 @@
+aiodns
+aiohttp
+aioopenssl
+asyncio
+boto3
+flask
+oauth2client
+google-auth
