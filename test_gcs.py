@@ -8,6 +8,7 @@ try:
     host = BUCKET_NAME + ".storage.googleapis.com"
     if https_proxy := os.environ.get('HTTPS_PROXY'):
         proxy_host, proxy_port = https_proxy[7:].split(":")
+        print("Proxy detected: {}:{}".format(proxy_host, proxy_port))
         conn = http.client.HTTPSConnection(proxy_host, port=proxy_port, timeout=1)
         conn.set_tunnel(host)
     else:
