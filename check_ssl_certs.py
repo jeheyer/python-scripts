@@ -3,14 +3,21 @@
 # Just in case still running on Python2
 from __future__ import print_function
 
-import sys, ssl, time, datetime, math, socket, smtplib, getpass
+from smtplib import SMTP
+from sys import exit, argv
+from getpass import getuser
+from socket import create_connection, gethostname, gethostbyname, getaddrinfo, getaddrinfo, AI_CANONNAME
+from ssl import create_default_context
+from math import ceil
+from time import time, localtime, timezone, altzone, mktime, strptime
 
 DAYS_THRESHOLD = 12
 INPUT_FILE = "cert_hostnames.txt"
 
+
 class Target:
 
-    def __init__(self, target, port = 443):
+    def __init__(self, target: str, port: int = 443):
 
         if ":" in target:
             self.hostname, self.port = target.split(":")
@@ -23,17 +30,18 @@ class Target:
 
         # Verify hostname resolves in DNS
         try:
-            socket.gethostbyname(self.hostname)
+            gethostbyname(self.hostname)
             self.is_resolvable = True
         except:
             self.is_resolvable = False
 
         # Verify hostname is reachable on port 443
         try:
-            sock = socket.create_connection((self.hostname, str(self.port)), timeout=2)
+            sock = create_connection((self.hostname, str(self.port)), timeout=3)
             self.is_reachable = True
         except:
             self.is_reachable = False
+
 
 class SSLCert:
 
@@ -48,31 +56,32 @@ class SSLCert:
             return None
 
         # Get original issue and expriation timestamps
-        self.issued_timestamp = round(time.mktime(time.strptime(self.details['notBefore'], "%b %d %H:%M:%S %Y %Z")));
-        self.expiration_timestamp = round(time.mktime(time.strptime(self.details['notAfter'], "%b %d %H:%M:%S %Y %Z")));
+        self.issued_timestamp = round(mktime(strptime(self.details['notBefore'], "%b %d %H:%M:%S %Y %Z")));
+        self.expiration_timestamp = round(mktime(strptime(self.details['notAfter'], "%b %d %H:%M:%S %Y %Z")));
 
         # Adjust for local timezone setting
-        local_timezone_offset = time.timezone if (time.localtime().tm_isdst == 0) else time.altzone
-        current_timestamp = round(time.time()) + local_timezone_offset
+        local_timezone_offset = timezone if localtime().tm_isdst == 0 else altzone
+        current_timestamp = round(time()) + local_timezone_offset
 
         # Do math to determine days, hour, seconds remaining until expiration
         self.seconds_until_expiration = self.expiration_timestamp - current_timestamp
-        self.hours_until_expiration = math.ceil(self.seconds_until_expiration / 3600)
+        self.hours_until_expiration = ceil(self.seconds_until_expiration / 3600)
         self.days_until_expiration =  self.hours_until_expiration // 24
+
 
     def GetCertDetails(self):
 
-        context = ssl.create_default_context()
+        context = create_default_context()
 
         # Verify hostname is resolvable
         try:
-            socket.gethostbyname(self.hostname)
+            gethostbyname(self.hostname)
         except:
             return False, "does not resolve in DNS"
 
         # Verify hostname is reachable on port 443
         try:
-            sock = socket.create_connection((self.hostname, "443"), timeout=2)
+            sock = create_connection((self.hostname, "443"), timeout=2)
         except:
             return False, "is not reachable on port 443"
 
@@ -91,36 +100,38 @@ class SSLCert:
         # Cert looks good
         return True, cert_details
 
-def GetHostnames(input_file):
 
-    hostnames = []
+def get_targets(input_file: str) -> list:
+
+    targets = []
     try:
         f = open(input_file, 'r')
     except:
-        sys.exit("Can't open file: '"+ input_file +"'")
+        exit("Can't open file: '"+ input_file +"'")
 
     for line in f:
         if line.startswith('#') or line.startswith('\n'):
             continue
         else:
-            hostnames.append(line.rstrip())
+            targets .append(line.rstrip())
     f.close()
-    return hostnames
+    return targets
+
 
 def main():
 
-    if len(sys.argv) < 2:
-        sys.exit("Usage: " + sys.argv[0] + " 'hostnames_file'")
-    input_file = sys.argv[1]
+    if len(argv) < 2:
+        exit("Usage: " + argv[0] + " 'hostnames_file'")
+    input_file = argv[1]
     recipient = None
-    if len(sys.argv) > 2:
-        recipient = sys.argv[2]
-    if len(sys.argv) > 3:
-        sender = sys.argv[3]
+    if len(argv) > 2:
+        recipient = argv[2]
+    if len(argv) > 3:
+        sender = argv[3]
     else:
-        sender = getpass.getuser() + "@" + socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3]
+        sender = getuser() + "@" + getaddrinfo(gethostname(), 0, flags=AI_CANONNAME)[0][3]
 
-    hostnames = GetHostnames(input_file)
+    hostnames = get_targets(input_file)
 
     output = ""
     for hostname in hostnames:
@@ -139,17 +150,18 @@ def main():
                 output += str(cert.days_until_expiration) + " days\n"
 
     if recipient and output:
-        subject = "An SSL certificate is expring soon!"
+        subject = "An SSL certificate is expiring soon!"
         message = f"From: {sender}\nTo: {recipient}\nSubject: {subject}\n{output}"
         try:
-            server = smtplib.SMTP('localhost', port=25)
+            server = SMTP('localhost', port=25)
             server.ehlo()
             server.sendmail(sender, recipient, message)
             server.quit()
         except Exception as e:
             print(e)
     else:
-        print(output, end = "")
+        print(output, end="")
+
 
 if __name__ == "__main__":
     main()
