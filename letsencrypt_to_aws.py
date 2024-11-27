@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
-import os, boto3, sys, os, time, math, datetime
+import os
+import sys
+import time
+import math
+import datetime
+import boto3
 
 DAYS = 29
 PROFILE_NAME = os.environ.get('AWS_PROFILE', "default")
 REGION_NAME = os.environ.get('AWS_REGION', "us-east-1")
+PLATFORM = sys.platform
 
 NOW =  math.floor(time.time())
 THRESHOLD = NOW + 86400 * DAYS
@@ -30,11 +36,10 @@ for cert in _['CertificateSummaryList']:
 
 
         # Look for new certs from Letsencrypt certbot
-        platform = sys.platform
-        if "linux" in platform:
-             SRC_DIR = "/etc/letsencrypt/live/"
-        if "freebsd" in platform:
+        if "freebsd" in PLATFORM:
              SRC_DIR = "/usr/local/etc/letsencrypt/live/"
+        else:
+            SRC_DIR = "/etc/letsencrypt/live/"
 
         # Check for new files
         for f in ["cert.pem", "privkey.pem", "chain.pem"]:
