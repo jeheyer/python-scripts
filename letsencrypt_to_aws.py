@@ -28,22 +28,23 @@ for cert in _['CertificateSummaryList']:
     cert_details = client.describe_certificate(CertificateArn=cert['CertificateArn'])
     expires_date = cert_details['Certificate']['NotAfter']
     expires_timestamp = datetime.datetime.timestamp(expires_date)
+    #print(expires_date, expires_timestamp)
 
     # Check if cert is coming up for renewal or already expired
     if expires_timestamp < THRESHOLD or expires_timestamp <= NOW:
 
         files = []
 
-
         # Look for new certs from Letsencrypt certbot
         if "freebsd" in PLATFORM:
-             SRC_DIR = "/usr/local/etc/letsencrypt/live/"
+             SRC_DIR = "/usr/local/etc/letsencrypt/live"
         else:
-            SRC_DIR = "/etc/letsencrypt/live/"
+            SRC_DIR = "/etc/letsencrypt/live"
 
         # Check for new files
         for f in ["cert.pem", "privkey.pem", "chain.pem"]:
-            file = SRC_DIR + cert['DomainName'] + "/" + f
+            #file = SRC_DIR + cert['DomainName'] + "/" + f
+            file = os.path.join(SRC_DIR, cert['DomainName'], f)
             print(file)
             contents = open(file, 'rb').read()
             files.append(contents)
